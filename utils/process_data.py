@@ -4,14 +4,7 @@ import os.path
 import random
 from glob import glob
 
-from tqdm import tqdm
 import stanza
-
-
-def batch(iterable, n=1):
-    l = len(iterable)
-    for ndx in range(0, l, n):
-        yield iterable[ndx:min(ndx + n, l)]
 
 
 def process_billion():
@@ -19,10 +12,11 @@ def process_billion():
     heldout = glob(os.path.join(os.getcwd(), "../data/billion/heldout-monolingual.tokenized.shuffled/*"))
     os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/train"))
     os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/dev"))
+    sample_size = 10
 
     training_data = []
     print("processing train files")
-    for file in tqdm(training_files):
+    for file in training_files:
         with open(file) as f:
             training_data += [line.strip() for line in f.readlines()]
 
@@ -33,10 +27,13 @@ def process_billion():
 
     train_depend = []
     train_pos = []
-    for data_batch in tqdm(batch(train_sample, 1000)):
-        train_parsed_data = nlp("\n\n".join(data_batch))
-        train_depend += [" ".join(sent.dependencies_string().split("\n")) for sent in train_parsed_data.sentences]
-        train_pos += [" ".join([word.upos for word in sent.words]) for sent in train_parsed_data.sentences]
+    for data_batch in train_sample:
+        train_parsed_data = nlp(data_batch)
+        train_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                  train_parsed_data.sentences]
+        train_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in train_parsed_data.sentences]
+        train_depend.append(" ".join(train_depend_fragments))
+        train_pos.append(" ".join(train_pos_fragments))
 
     with open(os.path.join(os.getcwd(), "../data/billion/splits/train/dependencies.txt"), 'w') as train_depend_out:
         train_depend_out.write("\n".join(train_depend))
@@ -47,11 +44,11 @@ def process_billion():
 
     dev_data = []
     print("processing dev files")
-    for file in tqdm(heldout):
+    for file in heldout:
         with open(file) as f:
             dev_data += [line.strip() for line in f.readlines()]
 
-    dev_sample = random.sample(dev_data, 30000)
+    dev_sample = random.sample(dev_data, sample_size)
 
     with open(os.path.join(os.getcwd(), "../data/billion/splits/dev/data.txt"), 'w') as dev_out:
         print(f"{len(dev_sample)} samples for dev")
@@ -59,10 +56,13 @@ def process_billion():
 
     dev_depend = []
     dev_pos = []
-    for data_batch in tqdm(batch(dev_sample, 1000)):
-        dev_parsed_data = nlp("\n\n".join(data_batch))
-        dev_depend += [" ".join(sent.dependencies_string().split("\n")) for sent in dev_parsed_data.sentences]
-        dev_pos += [" ".join([word.upos for word in sent.words]) for sent in dev_parsed_data.sentences]
+    for data_batch in dev_sample:
+        dev_parsed_data = nlp(data_batch)
+        dev_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                  dev_parsed_data.sentences]
+        dev_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in dev_parsed_data.sentences]
+        dev_depend.append(" ".join(dev_depend_fragments))
+        dev_pos.append(" ".join(dev_pos_fragments))
 
     with open(os.path.join(os.getcwd(), "../data/billion/splits/dev/dependencies.txt"), 'w') as dev_depend_out:
         dev_depend_out.write("\n".join(dev_depend))

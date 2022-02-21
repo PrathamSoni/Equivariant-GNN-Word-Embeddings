@@ -21,7 +21,7 @@ echo "SLURM_NNODES"=$SLURM_NNODES
 echo "SLURMTMPDIR="$SLURMTMPDIR
 echo "working directory = "$SLURM_SUBMIT_DIR
 source ~/.bashrc
-conda activate egnnnlp
+conda activate local_nmt
 
 cd ../utils
 python process_data.py --dataset billion
