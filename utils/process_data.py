@@ -8,39 +8,39 @@ import stanza
 
 
 def process_billion():
-    training_files = glob(os.path.join(os.getcwd(), "../data/billion/training-monolingual.tokenized.shuffled/*"))
+    pretraining_files = glob(os.path.join(os.getcwd(), "../data/billion/training-monolingual.tokenized.shuffled/*"))
     heldout = glob(os.path.join(os.getcwd(), "../data/billion/heldout-monolingual.tokenized.shuffled/*"))
-    os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/train"))
+    os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/pretrain"))
     os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/dev"))
-    sample_size = 10
+    sample_size = 100
 
-    training_data = []
-    print("processing train files")
-    for file in training_files:
+    pretraining_data = []
+    print("processing pretrain files")
+    for file in pretraining_files:
         with open(file) as f:
-            training_data += [line.strip() for line in f.readlines()]
+            pretraining_data += [line.strip() for line in f.readlines()]
 
-    train_sample = random.sample(training_data, 30000)
-    with open(os.path.join(os.getcwd(), "../data/billion/splits/train/data.txt"), 'w') as train_out:
-        print(f"{len(train_sample)} samples for train")
-        train_out.write('\n'.join(train_sample))
+    pretrain_sample = random.sample(pretraining_data, sample_size)
+    with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/data.txt"), 'w') as pretrain_out:
+        print(f"{len(pretrain_sample)} samples for pretrain")
+        pretrain_out.write('\n'.join(pretrain_sample))
 
-    train_depend = []
-    train_pos = []
-    for data_batch in train_sample:
-        train_parsed_data = nlp(data_batch)
-        train_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
-                                  train_parsed_data.sentences]
-        train_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in train_parsed_data.sentences]
-        train_depend.append(" ".join(train_depend_fragments))
-        train_pos.append(" ".join(train_pos_fragments))
+    pretrain_depend = []
+    pretrain_pos = []
+    for data_batch in pretrain_sample:
+        pretrain_parsed_data = nlp(data_batch)
+        pretrain_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                  pretrain_parsed_data.sentences]
+        pretrain_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in pretrain_parsed_data.sentences]
+        pretrain_depend.append(" ".join(pretrain_depend_fragments))
+        pretrain_pos.append(" ".join(pretrain_pos_fragments))
 
-    with open(os.path.join(os.getcwd(), "../data/billion/splits/train/dependencies.txt"), 'w') as train_depend_out:
-        train_depend_out.write("\n".join(train_depend))
+    with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/dependencies.txt"), 'w') as pretrain_depend_out:
+        pretrain_depend_out.write("\n".join(pretrain_depend))
 
-    with open(os.path.join(os.getcwd(), "../data/billion/splits/train/pos.txt"), 'w') as train_pos_out:
-        train_pos_out.write("\n".join(train_pos))
-    del training_data
+    with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/pos.txt"), 'w') as pretrain_pos_out:
+        pretrain_pos_out.write("\n".join(pretrain_pos))
+    del pretraining_data
 
     dev_data = []
     print("processing dev files")
