@@ -2,18 +2,67 @@ import datetime
 import os
 from argparse import ArgumentParser
 
-from data.datasets import get_dataset
 import torch
+import torch_geometric
+
+import models.models
+from data.datasets import get_dataset
+from gvp.data import BatchSampler
 
 
-def pretrain(dataset, epochs, lr, dir):
+def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
+    count = 0
+    pretrain_dataset = get_dataset(dataset, "pretrain", encoder)
+    pretrain_loader = torch_geometric.loader.DataLoader(pretrain_dataset,
+                                                        batch_sampler=BatchSampler(pretrain_dataset.node_counts,
+                                                                                   max_nodes=batch_size))
+
+    dev_dataset = get_dataset(dataset, "dev", encoder, pretrain_dataset.pos_map, pretrain_dataset.dependency_map)
+    dev_loader = torch_geometric.loader.DataLoader(dev_dataset,
+                                                        batch_sampler=BatchSampler(pretrain_dataset.node_counts,
+                                                                                   max_nodes=batch_size))
+
+    model = models.models.GraphEncoder((300, 2), (37, 1), pos_map=pretrain_dataset.pos_map,
+                                       dep_map=pretrain_dataset.dependency_map)
+    optimizer = torch.optim.Adam(model.parameters(), lr, weight_decay=.0001)
+    pos_loss = torch.nn.CrossEntropyLoss(reduction='sum')
+    model.train()
+
     for i in range(epochs):
         losses = []
-        for x in dataset:
-            print(x)
+        for x in pretrain_loader:
+            x = x.to(device)
+            pos = x.pos
+            depend = x.dependency.to(device)
+
+            # forward the model
+            optimizer.zero_grad()
+
+            latent, pos_pred, depend_pred = model(x)
+            dep_scores = []
+            for raw in depend_pred:
+                n, _, _ = raw.shape
+                dep_scores.append(raw[list(range(n)), depend[slice(x.ptr[i], x.ptr[i+1]), 0], depend[slice(x.ptr[i], x.ptr[i+1]), 1]])
+            dep_scores = torch.log(torch.cat(dep_scores))
+            loss = pos_loss(pos_pred, pos) - dep_scores.sum()
+            losses.append(loss.item())
+
+            # backprop and update the parameters
+            loss.backward()
+            optimizer.step()
+
+            print(loss)
+        print(sum(losses) / len(losses))
+        # with torch.no_grad():
+        #     for x, depend, pos in dev_dataset:
+        #         x = x.to(device)
+        #         pos = pos.to(device)
+        #         depend = depend.to(device)
 
 
-def train(dataset, epochs, lr, dir):
+def train(dataset, dir, encoder, epochs, lr, batch_size):
+    train_dataset = get_dataset(dataset, "train", encoder, batch_size)
+    dev_dataset = get_dataset(dataset, "dev", encoder, batch_size)
     for i in range(epochs):
         losses = []
         for x, depend, pos in dataset:
@@ -53,7 +102,8 @@ def train(dataset, epochs, lr, dir):
             # pbar.set_description(f"epoch {epoch + 1} iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
 
-def test(dataset, dir):
+def test(dataset, dir, encoder):
+    test_dataset = get_dataset(dataset, "test", encoder, 1)
     pass
 
 
@@ -63,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode")
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--lr", type=float)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--dir")
     parser.add_argument("--encoder")
     args = parser.parse_args()
@@ -75,13 +125,10 @@ if __name__ == "__main__":
 
     if args.mode == "pretrain":
         os.mkdir(working_dir)
-        dataset = get_dataset(args.dataset, args.mode, args.encoder, args.batch_size)
-        pretrain(dataset, args.epochs, args.lr, args.dir)
+        pretrain(args.dataset, args.dir, args.encoder, args.epochs, args.lr, args.batch_size)
 
     if args.mode == "train":
-        dataset = get_dataset(args.dataset, args.mode, args.encoder, args.batch_size)
-        train(dataset, args.epochs, args.lr, args.dir)
+        train(args.dataset, args.dir, args.encoder, args.epochs, args.lr, args.batch_size)
 
     elif args.mode == "test":
-        dataset = get_dataset(args.dataset, args.mode, args.encoder, 1)
-        test(dataset, args.epochs)
+        test(args.dataset, args.dir, args.encoder)

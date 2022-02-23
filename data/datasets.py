@@ -4,7 +4,7 @@ import torch_geometric
 import gensim.downloader as api
 import torch.nn.functional as F
 import numpy as np
-from gvp.data import BatchSampler
+import time
 
 class GraphEncoder:
     def __init__(self, base_word_encoder, num_rbf=16, num_positional_embeddings=16):
@@ -61,7 +61,7 @@ class GraphEncoder:
         RBF = torch.exp(-((D_expand - D_mu) / D_sigma) ** 2)
         return RBF
 
-    def __call__(self, sentence, dependencies):
+    def __call__(self, sentence, dependencies, pos):
         with torch.no_grad():
             n = len(sentence)
             scalar_embeddings = []
@@ -71,7 +71,7 @@ class GraphEncoder:
                     scalar_embeddings.append(self.word_encoder[word])
 
                 except KeyError:
-                    scalar_embeddings.append(np.full(self.base_dim, float('inf')))
+                    scalar_embeddings.append(np.full(self.base_dim, 0))
 
             coords = torch.as_tensor(np.array(scalar_embeddings),
                                      device=self.device, dtype=torch.float32)
@@ -135,12 +135,14 @@ class GraphEncoder:
         data = torch_geometric.data.Data(x=coords,
                                          node_s=node_s, node_v=node_v,
                                          edge_s=edge_s, edge_v=edge_v,
-                                         edge_index=edge_index, mask=mask)
+                                         edge_index=edge_index, mask=mask,
+                                         dependency=dependencies.long(), pos=pos.long())
         return data
 
 
 class BillionDataset(Dataset):
-    def __init__(self, split, base_word_encoder):
+    def __init__(self, split, base_word_encoder, pos_map=None, dependency_map=None):
+        start = time.time()
         self.encoder = GraphEncoder(base_word_encoder)
         self.device = self.encoder.device
         self.padding = "<PAD>"
@@ -162,32 +164,38 @@ class BillionDataset(Dataset):
                 self.depend.append([token[1:] for token in processed_line])
             unique_depend = list(sorted(list(set([i[1] for sublist in self.depend for i in sublist]))))
             unique_depend.insert(0, self.padding)
-            self.dependency_map = {pos: i for i, pos in enumerate(unique_depend)}
+            self.dependency_map = dependency_map or {pos: i for i, pos in enumerate(unique_depend)}
         with open(f"data/billion/splits/{split}/pos.txt") as f:
             self.pos = [line.strip().split(" ") for line in f.readlines()]
             unique_pos = list(sorted(list(set([i for sublist in self.pos for i in sublist]))))
             unique_pos.insert(0, self.padding)
-            self.pos_map = {pos: i for i, pos in enumerate(unique_pos)}
+            self.pos_map = pos_map or {pos: i for i, pos in enumerate(unique_pos)}
+
+        self.data = []
+        for i in range(self.__len__()):
+            depend = self.depend[i]
+            processed_depend = self.encode_dependence(depend)
+            pos = self.pos[i]
+            self.data.append(self.encoder(self.tokens[i], processed_depend, self.encode_pos(pos)))
+
+        print(f"processed dataset in {time.time()-start}s")
 
     def encode_dependence(self, depend):
-        depend += (self.block_size - len(depend)) * [[0, self.padding]]
-        return torch.Tensor([[int(dependency[0]), self.dependency_map[dependency[1]]] for dependency in depend])
+        # depend += (self.block_size - len(depend)) * [[0, self.padding]]
+        return torch.Tensor([[int(dependency[0]), self.dependency_map.get(dependency[1], 0)] for dependency in depend])
 
     def encode_pos(self, pos):
         out = []
         for i in pos:
-            out.append(self.pos_map[i])
-        out += (self.block_size - len(out)) * [0]
+            out.append(self.pos_map.get(i, 0))
+        # out += (self.block_size - len(out)) * [0]
         return torch.Tensor(out)
 
     def __len__(self):
         return len(self.text)
 
     def __getitem__(self, item):
-        depend = self.depend[item]
-        processed_depend = self.encode_dependence(depend)
-        pos = self.pos[item]
-        return self.encoder(self.tokens[item], processed_depend), processed_depend, self.encode_pos(pos)
+        return self.data[item]
 
 
 class ACE2005Dataset(Dataset):
@@ -212,13 +220,12 @@ class DrugGeneDataset(Dataset):
         pass
 
 
-def get_dataset(dataset, split, base_word_encoder, batch_size):
+def get_dataset(dataset, split, base_word_encoder, pos_map=None, dependency_map=None):
     if dataset == "ace":
         data = ACE2005Dataset(split, base_word_encoder)
     elif dataset == "drug":
         data = DrugGeneDataset(split, base_word_encoder)
     elif dataset == "billion":
-        data = BillionDataset(split, base_word_encoder)
+        data = BillionDataset(split, base_word_encoder, pos_map=pos_map, dependency_map=dependency_map)
 
-    shuffle = split != "test"
-    return torch_geometric.loader.DataLoader(data, batch_sampler=BatchSampler(data.node_counts, max_nodes=batch_size))
+    return data
