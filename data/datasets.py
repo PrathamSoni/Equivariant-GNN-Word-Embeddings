@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import time
 
+
 class GraphEncoder:
     def __init__(self, base_word_encoder, num_rbf=16, num_positional_embeddings=16):
         self.device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
@@ -178,17 +179,17 @@ class BillionDataset(Dataset):
             pos = self.pos[i]
             self.data.append(self.encoder(self.tokens[i], processed_depend, self.encode_pos(pos)))
 
-        print(f"processed dataset in {time.time()-start}s")
+        print(f"processed dataset in {time.time() - start}s")
 
     def encode_dependence(self, depend):
-        # depend += (self.block_size - len(depend)) * [[0, self.padding]]
-        return torch.Tensor([[int(dependency[0]), self.dependency_map.get(dependency[1], 0)] for dependency in depend])
+        return torch.Tensor(
+            [[int(dependency[0]) - 1 if int(dependency[0]) != 0 else i, self.dependency_map.get(dependency[1], 0)] for
+             i, dependency in enumerate(depend)])
 
     def encode_pos(self, pos):
         out = []
         for i in pos:
             out.append(self.pos_map.get(i, 0))
-        # out += (self.block_size - len(out)) * [0]
         return torch.Tensor(out)
 
     def __len__(self):

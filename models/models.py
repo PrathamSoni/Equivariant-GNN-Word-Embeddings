@@ -50,9 +50,7 @@ class GraphEncoder(Module):
 
             H_label_head = self.label_head_embedding(sent)
             label_dep_score = torch.stack([layer(self.label_dep_embedding(sent)) for layer in self.arc_label_layers])
-            print(label_dep_score.shape)
             s_label = torch.softmax(H_label_head @ label_dep_score.permute(1, 2, 0), dim=-1)
-            print(s_label.shape)
 
             scores.append(s_label * s_arc.unsqueeze(2))
 
