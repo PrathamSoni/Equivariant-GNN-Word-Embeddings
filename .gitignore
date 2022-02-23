@@ -139,3 +139,4 @@ dmypy.json
 *.xml.gz
 *.xml
 /data/pubmed/splits/
+/gvp-pytorch/
