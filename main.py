@@ -26,7 +26,7 @@ def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
                                                                               max_nodes=batch_size))
 
     model = models.models.GraphEncoder((pretrain_dataset.encoder.base_dim, 2), (37, 1), vector_dim=pretrain_dataset.encoder.base_dim,
-                                       pos_map=pretrain_dataset.pos_map, dep_map=pretrain_dataset.dependency_map)
+                                       pos_map=pretrain_dataset.pos_map, dep_map=pretrain_dataset.dependency_map).to(device)
 
     print("Number of parameters: ", sum(p.numel() for p in model.parameters()))
 

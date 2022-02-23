@@ -1,7 +1,6 @@
 from torch.nn import *
 import gvp
 import torch
-import operator
 
 
 class GraphEncoder(Module):
