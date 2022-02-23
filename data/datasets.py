@@ -14,10 +14,12 @@ class GraphEncoder:
         self.num_positional_embeddings = num_positional_embeddings
 
         if base_word_encoder == "wikipedia":
-            self.word_encoder = KeyedVectors.load_word2vec_format("data/wikipediaword2vec/wikipedia200.bin", binary=True)
+            self.word_encoder = KeyedVectors.load_word2vec_format("data/wikipediaword2vec/wikipedia200.bin",
+                                                                  binary=True)
             self.base_dim = 200
         elif base_word_encoder == "pubmed":
-            self.word_encoder = KeyedVectors.load_word2vec_format("data/pubmedword2vec/pubmed2018_w2v_200D.bin", binary=True)
+            self.word_encoder = KeyedVectors.load_word2vec_format("data/pubmedword2vec/pubmed2018_w2v_200D.bin",
+                                                                  binary=True)
             self.base_dim = 200
 
     def _normalize(self, tensor, dim=-1):
@@ -120,8 +122,9 @@ class GraphEncoder:
                 edge_one_hot_map[(i, i)] = torch.zeros(5)
                 edge_one_hot_map[(i, i)][4] += 1
 
-            edge_index = torch.Tensor([list(edge) for edge in edge_one_hot_map.keys()]).T.long()
-            edge_one_hot = torch.stack(list(edge_one_hot_map.values()))
+            edge_index = torch.Tensor([list(edge) for edge in edge_one_hot_map.keys()],
+                                      device=self.device).T.long()
+            edge_one_hot = torch.stack(list(edge_one_hot_map.values())).to(self.device)
             pos_embeddings = self._positional_embeddings(edge_index)
             E_vectors = coords[edge_index[0]] - coords[edge_index[1]]
             rbf = self._rbf(E_vectors.norm(dim=-1), D_count=self.num_rbf, device=self.device)
@@ -187,13 +190,13 @@ class BillionDataset(Dataset):
     def encode_dependence(self, depend):
         return torch.Tensor(
             [[int(dependency[0]) - 1 if int(dependency[0]) != 0 else i, self.dependency_map.get(dependency[1], 0)] for
-             i, dependency in enumerate(depend)])
+             i, dependency in enumerate(depend)], device=self.device)
 
     def encode_pos(self, pos):
         out = []
         for i in pos:
             out.append(self.pos_map.get(i, 0))
-        return torch.Tensor(out)
+        return torch.Tensor(out, device=self.device)
 
     def __len__(self):
         return len(self.text)
