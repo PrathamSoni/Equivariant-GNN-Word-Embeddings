@@ -19,7 +19,7 @@ class GraphEncoder(Module):
         self.POS_classifier = Linear(16, len(pos_map))
 
         self.arc_layer = Linear(100, 100, bias=False)
-        self.arc_label_layers = [Linear(100, 100, bias=False) for i in range(len(dep_map))]
+        self.arc_label_layers = ModuleList([Linear(100, 100, bias=False) for i in range(len(dep_map))])
 
     def embedding(self, x, mask=None):
         h_V = (x.node_s, x.node_v)
