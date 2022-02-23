@@ -178,13 +178,6 @@ class BillionDataset(Dataset):
             unique_pos.insert(0, self.padding)
             self.pos_map = pos_map or {pos: i for i, pos in enumerate(unique_pos)}
 
-        self.data = []
-        for i in range(self.__len__()):
-            depend = self.depend[i]
-            processed_depend = self.encode_dependence(depend)
-            pos = self.pos[i]
-            self.data.append(self.encoder(self.tokens[i], processed_depend, self.encode_pos(pos)))
-
         print(f"processed dataset in {time.time() - start}s")
 
     def encode_dependence(self, depend):
@@ -202,7 +195,10 @@ class BillionDataset(Dataset):
         return len(self.text)
 
     def __getitem__(self, item):
-        return self.data[item]
+        depend = self.depend[item]
+        processed_depend = self.encode_dependence(depend)
+        pos = self.pos[item]
+        return self.encoder(self.tokens[item], processed_depend, self.encode_pos(pos))
 
 
 class ACE2005Dataset(Dataset):
