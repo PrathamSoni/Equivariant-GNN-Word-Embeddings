@@ -91,10 +91,9 @@ def process_pubmed():
         raw_data.extend([title.firstChild.nodeValue for title in title_list])
         title_list = doc.getElementsByTagName('AbstractText')
         raw_data.extend([title.firstChild.nodeValue for title in title_list])
-        break
 
     random.shuffle(raw_data)
-    pretrain_sample = raw_data[:5]
+    pretrain_sample = raw_data[:len(raw_data) // 2]
     dev_sample = raw_data[len(raw_data) // 2:]
 
     nlp = spacy.load("en_core_sci_lg")
@@ -108,7 +107,7 @@ def process_pubmed():
     pretrain_pos = []
     for data_batch in pretrain_sample:
         pretrain_parsed_data = nlp(data_batch)
-        pretrain_depend_fragments = [" ".join([f"(\'{word.text}\', {word.head.i}, \'{word.dep_}\')" for word in sent])
+        pretrain_depend_fragments = [" ".join([f"(\'{word.text}\', {word.head.i+1 if word.dep_!='ROOT' else 0}, \'{word.dep_}\')" for word in sent])
                                      for sent in pretrain_parsed_data.sents]
         pretrain_pos_fragments = [" ".join([word.pos_ for word in sent]) for sent in
                                   pretrain_parsed_data.sents]

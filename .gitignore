@@ -139,3 +139,4 @@ dmypy.json
 *.bin
 *.xml.gz
 *.xml
+/data/pubmed/splits/
