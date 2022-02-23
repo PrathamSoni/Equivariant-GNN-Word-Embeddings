@@ -85,8 +85,8 @@ def process_pubmed():
     os.makedirs(os.path.join(os.getcwd(), "../data/pubmed/splits/dev"))
 
     raw_data = []
-    for xml in raw:
-        print(xml)
+    for i, xml in enumerate(raw):
+        print(i+1, xml)
         doc = minidom.parse(xml)
         title_list = doc.getElementsByTagName('ArticleTitle')
         print(f"titles: {len(title_list)}")
@@ -98,6 +98,9 @@ def process_pubmed():
 
         print()
         del doc
+
+        if i == 9:
+            break
 
     random.shuffle(raw_data)
     pretrain_data = raw_data[:len(raw_data) // 2]
