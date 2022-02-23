@@ -133,7 +133,6 @@ dmypy.json
 .idea
 /data/drug/
 /data/billion/
-/gvp-pytorch/
 *.DS_STORE
 /runs/
 *.bin
