@@ -122,7 +122,7 @@ class GraphEncoder:
                 edge_one_hot_map[(i, i)] = torch.zeros(5)
                 edge_one_hot_map[(i, i)][4] += 1
 
-            edge_index = torch.Tensor([list(edge) for edge in edge_one_hot_map.keys()],
+            edge_index = torch.as_tensor([list(edge) for edge in edge_one_hot_map.keys()],
                                       device=self.device).T.long()
             edge_one_hot = torch.stack(list(edge_one_hot_map.values())).to(self.device)
             pos_embeddings = self._positional_embeddings(edge_index)
@@ -188,7 +188,7 @@ class BillionDataset(Dataset):
         print(f"processed dataset in {time.time() - start}s")
 
     def encode_dependence(self, depend):
-        return torch.Tensor(
+        return torch.as_tensor(
             [[int(dependency[0]) - 1 if int(dependency[0]) != 0 else i, self.dependency_map.get(dependency[1], 0)] for
              i, dependency in enumerate(depend)], device=self.device)
 
@@ -196,7 +196,7 @@ class BillionDataset(Dataset):
         out = []
         for i in pos:
             out.append(self.pos_map.get(i, 0))
-        return torch.Tensor(out, device=self.device)
+        return torch.as_tensor(out, device=self.device)
 
     def __len__(self):
         return len(self.text)
