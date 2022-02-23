@@ -90,11 +90,11 @@ def process_pubmed():
         doc = minidom.parse(xml)
         title_list = doc.getElementsByTagName('ArticleTitle')
         print(f"titles: {len(title_list)}")
-        raw_data.extend([title.firstChild.nodeValue for title in title_list if title.firstChild is not None])
+        raw_data.extend([title.firstChild.nodeValue for title in title_list if title.firstChild is not None and title.firstChild.nodeValue is not None])
 
         abstract_list = doc.getElementsByTagName('AbstractText')
         print(f"abstracts: {len(abstract_list)}")
-        raw_data.extend([abstract.firstChild.nodeValue for abstract in abstract_list if abstract.firstChild is not None])
+        raw_data.extend([abstract.firstChild.nodeValue for abstract in abstract_list if abstract.firstChild is not None and abstract.firstChild.nodeValue is not None])
 
         print()
         del doc
