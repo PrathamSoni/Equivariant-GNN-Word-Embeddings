@@ -93,15 +93,21 @@ def process_pubmed():
         raw_data.extend([title.firstChild.nodeValue for title in title_list if title.firstChild is not None])
 
         abstract_list = doc.getElementsByTagName('AbstractText')
-        print(f"titles: {len(abstract_list)}")
+        print(f"abstracts: {len(abstract_list)}")
         raw_data.extend([abstract.firstChild.nodeValue for abstract in abstract_list if abstract.firstChild is not None])
 
         print()
         del doc
 
     random.shuffle(raw_data)
-    pretrain_sample = raw_data[:len(raw_data) // 2]
-    dev_sample = raw_data[len(raw_data) // 2:]
+    pretrain_data = raw_data[:len(raw_data) // 2]
+    dev_data = raw_data[len(raw_data) // 2:]
+    sample_size = 30000
+    pretrain_sample = random.sample(pretrain_data, sample_size)
+    dev_sample = random.sample(dev_data, sample_size)
+    del dev_data
+    del pretrain_data
+
 
     nlp = spacy.load("en_core_sci_lg")
 
