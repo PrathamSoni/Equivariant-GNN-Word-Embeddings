@@ -25,12 +25,15 @@ def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
                                                    batch_sampler=BatchSampler(pretrain_dataset.node_counts,
                                                                               max_nodes=batch_size))
 
-    model = models.models.GraphEncoder((300, 2), (37, 1), pos_map=pretrain_dataset.pos_map,
-                                       dep_map=pretrain_dataset.dependency_map)
-    writer.add_graph(model)
+    model = models.models.GraphEncoder((pretrain_dataset.encoder.base_dim, 2), (37, 1), vector_dim=pretrain_dataset.encoder.base_dim,
+                                       pos_map=pretrain_dataset.pos_map, dep_map=pretrain_dataset.dependency_map)
+
+    print("Number of parameters: ", sum(p.numel() for p in model.parameters()))
+
     optimizer = torch.optim.Adam(model.parameters(), lr, weight_decay=.0001)
     pos_loss = torch.nn.CrossEntropyLoss(reduction='sum')
-
+    best_loss = float('inf')
+    counter = 0
     for i in range(epochs):
         start = time.time()
         pretrain_total_loss = 0
@@ -72,9 +75,9 @@ def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
         pretrain_total_pos_loss /= nodes
         pretrain_total_dep_loss /= nodes
 
-        writer.add_scalar("total_loss/pretrain", pretrain_total_loss, epochs)
-        writer.add_scalar("total_pos_loss/pretrain", pretrain_total_pos_loss, epochs)
-        writer.add_scalar("total_dep_loss/pretrain", pretrain_total_dep_loss, epochs)
+        writer.add_scalar("total_loss/pretrain", pretrain_total_loss, i)
+        writer.add_scalar("total_pos_loss/pretrain", pretrain_total_pos_loss, i)
+        writer.add_scalar("total_dep_loss/pretrain", pretrain_total_dep_loss, i)
 
         dev_total_loss = 0
         dev_total_pos_loss = 0
@@ -92,10 +95,10 @@ def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
 
                 latent, pos_pred, depend_pred = model(x)
                 dep_scores = []
-                for raw in depend_pred:
+                for j, raw in enumerate(depend_pred):
                     n, _, _ = raw.shape
-                    dep_scores.append(raw[list(range(n)), depend[slice(x.ptr[i], x.ptr[i + 1]), 0], depend[
-                        slice(x.ptr[i], x.ptr[i + 1]), 1]])
+                    dep_scores.append(raw[list(range(n)), depend[slice(x.ptr[j], x.ptr[j + 1]), 0], depend[
+                        slice(x.ptr[j], x.ptr[j + 1]), 1]])
 
                 dep_scores = torch.log(torch.cat(dep_scores))
                 pos_loss_batch = pos_loss(pos_pred, pos)
@@ -112,16 +115,23 @@ def pretrain(dataset, dir, encoder, epochs, lr, batch_size):
         dev_total_pos_loss /= nodes
         dev_total_dep_loss /= nodes
 
-        writer.add_scalar("total_loss/pretrain_dev", dev_total_loss, epochs)
-        writer.add_scalar("total_pos_loss/pretrain_dev", dev_total_pos_loss, epochs)
-        writer.add_scalar("total_dep_loss/pretrain_dev", dev_total_dep_loss, epochs)
+        writer.add_scalar("total_loss/pretrain_dev", dev_total_loss, i)
+        writer.add_scalar("total_pos_loss/pretrain_dev", dev_total_pos_loss, i)
+        writer.add_scalar("total_dep_loss/pretrain_dev", dev_total_dep_loss, i)
 
         print(f"Epoch: {i}\tTime Elapsed: {time.time() - start}\n"
               f"\tPretrain\tTotal: {pretrain_total_loss}\tPOS: {pretrain_total_pos_loss}\tDep: {pretrain_total_dep_loss}\n"
-              f"\tPretrain\tTotal: {dev_total_loss}\tPOS: {dev_total_pos_loss}\tDep: {dev_total_dep_loss}\n")
+              f"\tDev\tTotal: {dev_total_loss}\tPOS: {dev_total_pos_loss}\tDep: {dev_total_dep_loss}\n")
 
-    with open(os.path.join(dir, "encoder.pt"), "w") as model_file:
-        torch.save(model.state_dict(), model_file)
+        if dev_total_loss < best_loss:
+            best_loss = dev_total_loss
+            counter = 0
+            torch.save(model.state_dict(), os.path.join(dir, "encoder.pt"))
+        else:
+            counter += 1
+            if counter == 10:
+                print("Early stop...")
+                break
 
     writer.close()
 

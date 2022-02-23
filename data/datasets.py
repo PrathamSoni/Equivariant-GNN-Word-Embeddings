@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 import torch
 import torch_geometric
-import gensim.downloader as api
+from gensim.models import KeyedVectors
 import torch.nn.functional as F
 import numpy as np
 import time
@@ -13,9 +13,12 @@ class GraphEncoder:
         self.num_rbf = num_rbf
         self.num_positional_embeddings = num_positional_embeddings
 
-        if base_word_encoder == "word2vec":
-            self.word_encoder = api.load("word2vec-google-news-300")
-            self.base_dim = 300
+        if base_word_encoder == "wikipedia":
+            self.word_encoder = KeyedVectors.load_word2vec_format("data/wikipediaword2vec/wikipedia200.bin", binary=True)
+            self.base_dim = 200
+        elif base_word_encoder == "pubmed":
+            self.word_encoder = KeyedVectors.load_word2vec_format("data/pubmedword2vec/pubmed2018_w2v_200D.bin", binary=True)
+            self.base_dim = 200
 
     def _normalize(self, tensor, dim=-1):
         '''

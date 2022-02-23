@@ -1,0 +1,1 @@
+http://tti-coin.jp/data/wikipedia200.bin (auto downloads)

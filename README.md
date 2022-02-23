@@ -17,6 +17,8 @@ here: https://www.microsoft.com/en-us/research/project/project-hanover/downloads
 
 The Billion Word Benchmark can be downloaded here: https://www.statmt.org/lm-benchmark/.
 
+### Parsers
+ScispaCy model: https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.4.0/en_core_sci_lg-0.4.0.tar.gz
 ## Experiments
 
 

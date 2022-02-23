@@ -3,19 +3,24 @@ import os
 import os.path
 import random
 from glob import glob
+from xml.dom import minidom
 
 import stanza
+import spacy
 
 
 def process_billion():
+    stanza.download('en')  # This downloads the English models for the neural pipeline
+    nlp = stanza.Pipeline('en')  # This sets up a default neural pipeline in English
+
     pretraining_files = glob(os.path.join(os.getcwd(), "../data/billion/training-monolingual.tokenized.shuffled/*"))
     heldout = glob(os.path.join(os.getcwd(), "../data/billion/heldout-monolingual.tokenized.shuffled/*"))
     os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/pretrain"))
     os.makedirs(os.path.join(os.getcwd(), "../data/billion/splits/dev"))
-    sample_size = 100
+    sample_size = 30000
 
     pretraining_data = []
-    print("processing pretrain files")
+    print("processing pretrain data")
     for file in pretraining_files:
         with open(file) as f:
             pretraining_data += [line.strip() for line in f.readlines()]
@@ -30,12 +35,14 @@ def process_billion():
     for data_batch in pretrain_sample:
         pretrain_parsed_data = nlp(data_batch)
         pretrain_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                     pretrain_parsed_data.sentences]
+        pretrain_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in
                                   pretrain_parsed_data.sentences]
-        pretrain_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in pretrain_parsed_data.sentences]
         pretrain_depend.append(" ".join(pretrain_depend_fragments))
         pretrain_pos.append(" ".join(pretrain_pos_fragments))
 
-    with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/dependencies.txt"), 'w') as pretrain_depend_out:
+    with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/dependencies.txt"),
+              'w') as pretrain_depend_out:
         pretrain_depend_out.write("\n".join(pretrain_depend))
 
     with open(os.path.join(os.getcwd(), "../data/billion/splits/pretrain/pos.txt"), 'w') as pretrain_pos_out:
@@ -43,7 +50,7 @@ def process_billion():
     del pretraining_data
 
     dev_data = []
-    print("processing dev files")
+    print("processing dev data")
     for file in heldout:
         with open(file) as f:
             dev_data += [line.strip() for line in f.readlines()]
@@ -59,7 +66,7 @@ def process_billion():
     for data_batch in dev_sample:
         dev_parsed_data = nlp(data_batch)
         dev_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
-                                  dev_parsed_data.sentences]
+                                dev_parsed_data.sentences]
         dev_pos_fragments = [" ".join([word.upos for word in sent.words]) for sent in dev_parsed_data.sentences]
         dev_depend.append(" ".join(dev_depend_fragments))
         dev_pos.append(" ".join(dev_pos_fragments))
@@ -72,10 +79,71 @@ def process_billion():
     del dev_data
 
 
-if __name__ == "__main__":
-    stanza.download('en')  # This downloads the English models for the neural pipeline
-    nlp = stanza.Pipeline('en')  # This sets up a default neural pipeline in English
+def process_pubmed():
+    raw = glob(os.path.join(os.getcwd(), "../data/pubmed/raw/*.xml"))
+    os.makedirs(os.path.join(os.getcwd(), "../data/pubmed/splits/pretrain"))
+    os.makedirs(os.path.join(os.getcwd(), "../data/pubmed/splits/dev"))
 
+    raw_data = []
+    for xml in raw:
+        doc = minidom.parse(xml)
+        title_list = doc.getElementsByTagName('ArticleTitle')
+        raw_data.extend([title.firstChild.nodeValue for title in title_list])
+        title_list = doc.getElementsByTagName('AbstractText')
+        raw_data.extend([title.firstChild.nodeValue for title in title_list])
+        break
+
+    random.shuffle(raw_data)
+    pretrain_sample = raw_data[:5]
+    dev_sample = raw_data[len(raw_data) // 2:]
+
+    nlp = spacy.load("en_core_sci_lg")
+
+    print("processing pretrain data")
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/pretrain/data.txt"), 'w') as pretrain_out:
+        print(f"{len(pretrain_sample)} samples for pretrain")
+        pretrain_out.write('\n'.join(pretrain_sample))
+
+    pretrain_depend = []
+    pretrain_pos = []
+    for data_batch in pretrain_sample:
+        pretrain_parsed_data = nlp(data_batch)
+        pretrain_depend_fragments = [" ".join([f"(\'{word.text}\', {word.head.i}, \'{word.dep_}\')" for word in sent])
+                                     for sent in pretrain_parsed_data.sents]
+        pretrain_pos_fragments = [" ".join([word.pos_ for word in sent]) for sent in
+                                  pretrain_parsed_data.sents]
+        pretrain_depend.append(" ".join(pretrain_depend_fragments))
+        pretrain_pos.append(" ".join(pretrain_pos_fragments))
+
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/pretrain/dependencies.txt"),
+              'w') as pretrain_depend_out:
+        pretrain_depend_out.write("\n".join(pretrain_depend))
+
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/pretrain/pos.txt"), 'w') as pretrain_pos_out:
+        pretrain_pos_out.write("\n".join(pretrain_pos))
+
+    print("processing dev data")
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/dev/data.txt"), 'w') as dev_out:
+        print(f"{len(dev_sample)} samples for dev")
+        dev_out.write('\n'.join(dev_sample))
+
+    dev_depend = []
+    dev_pos = []
+    for data_batch in dev_sample:
+        dev_parsed_data = nlp(data_batch)
+        dev_depend_fragments = [" ".join([f"(\'{word.text}\', {word.head.i}, \'{word.dep_}\')" for word in sent]) for
+                                sent in dev_parsed_data.sents]
+        dev_pos_fragments = [" ".join([word.pos_ for word in sent]) for sent in dev_parsed_data.sents]
+        dev_depend.append(" ".join(dev_depend_fragments))
+        dev_pos.append(" ".join(dev_pos_fragments))
+
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/dev/dependencies.txt"), 'w') as dev_depend_out:
+        dev_depend_out.write("\n".join(dev_depend))
+    with open(os.path.join(os.getcwd(), "../data/pubmed/splits/dev/pos.txt"), 'w') as dev_pos_out:
+        dev_pos_out.write("\n".join(dev_pos))
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset")
     args = parser.parse_args()
@@ -83,3 +151,5 @@ if __name__ == "__main__":
 
     if args.dataset == "billion":
         process_billion()
+    elif args.dataset == "pubmed":
+        process_pubmed()

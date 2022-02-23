@@ -136,3 +136,6 @@ dmypy.json
 /gvp-pytorch/
 *.DS_STORE
 /runs/
+*.bin
+*.xml.gz
+*.xml
