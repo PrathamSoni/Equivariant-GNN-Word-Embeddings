@@ -86,15 +86,17 @@ def process_pubmed():
 
     raw_data = []
     for i, xml in enumerate(raw):
-        print(i+1, xml)
+        print(i + 1, xml)
         doc = minidom.parse(xml)
         title_list = doc.getElementsByTagName('ArticleTitle')
         print(f"titles: {len(title_list)}")
-        raw_data.extend([title.firstChild.nodeValue for title in title_list if title.firstChild is not None and title.firstChild.nodeValue is not None])
+        raw_data.extend([str(title.firstChild.nodeValue).replace("\n", "") for title in title_list if
+                         title.firstChild is not None and title.firstChild.nodeValue is not None])
 
         abstract_list = doc.getElementsByTagName('AbstractText')
         print(f"abstracts: {len(abstract_list)}")
-        raw_data.extend([abstract.firstChild.nodeValue for abstract in abstract_list if abstract.firstChild is not None and abstract.firstChild.nodeValue is not None])
+        raw_data.extend([str(abstract.firstChild.nodeValue).replace("\n", "") for abstract in abstract_list if
+                         abstract.firstChild is not None and abstract.firstChild.nodeValue is not None])
 
         print()
         del doc
@@ -111,7 +113,6 @@ def process_pubmed():
     del dev_data
     del pretrain_data
 
-
     nlp = spacy.load("en_core_sci_lg")
 
     print("processing pretrain data")
@@ -123,7 +124,8 @@ def process_pubmed():
     pretrain_pos = []
     for data_batch in pretrain_sample:
         pretrain_parsed_data = nlp(data_batch)
-        pretrain_depend_fragments = [" ".join([f"(\'{word.text}\', {word.head.i+1 if word.dep_!='ROOT' else 0}, \'{word.dep_}\')" for word in sent])
+        pretrain_depend_fragments = [" ".join(
+            [f"(\'{word.text}\', {word.head.i + 1 if word.dep_ != 'ROOT' else 0}, \'{word.dep_}\')" for word in sent])
                                      for sent in pretrain_parsed_data.sents]
         pretrain_pos_fragments = [" ".join([word.pos_ for word in sent]) for sent in
                                   pretrain_parsed_data.sents]

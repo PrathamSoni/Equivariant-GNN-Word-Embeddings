@@ -153,7 +153,6 @@ class PretrainDataset(Dataset):
         self.encoder = GraphEncoder(base_word_encoder)
         self.device = self.encoder.device
         self.padding = "<PAD>"
-        self.block_size = 100
         self.node_counts = []
 
         with open(f"data/{data_loc}/splits/{split}/data.txt") as f:
