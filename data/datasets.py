@@ -147,8 +147,8 @@ class GraphEncoder:
         return data
 
 
-class BillionDataset(Dataset):
-    def __init__(self, split, base_word_encoder, pos_map=None, dependency_map=None):
+class PretrainDataset(Dataset):
+    def __init__(self, split, base_word_encoder, data_loc, pos_map=None, dependency_map=None):
         start = time.time()
         self.encoder = GraphEncoder(base_word_encoder)
         self.device = self.encoder.device
@@ -156,9 +156,9 @@ class BillionDataset(Dataset):
         self.block_size = 100
         self.node_counts = []
 
-        with open(f"data/billion/splits/{split}/data.txt") as f:
+        with open(f"data/{data_loc}/splits/{split}/data.txt") as f:
             self.text = [line.strip() for line in f.readlines()]
-        with open(f"data/billion/splits/{split}/dependencies.txt") as f:
+        with open(f"data/{data_loc}/splits/{split}/dependencies.txt") as f:
             self.depend = []
             self.tokens = []
             for line in f.readlines():
@@ -172,7 +172,7 @@ class BillionDataset(Dataset):
             unique_depend = list(sorted(list(set([i[1] for sublist in self.depend for i in sublist]))))
             unique_depend.insert(0, self.padding)
             self.dependency_map = dependency_map or {pos: i for i, pos in enumerate(unique_depend)}
-        with open(f"data/billion/splits/{split}/pos.txt") as f:
+        with open(f"data/{data_loc}/splits/{split}/pos.txt") as f:
             self.pos = [line.strip().split(" ") for line in f.readlines()]
             unique_pos = list(sorted(list(set([i for sublist in self.pos for i in sublist]))))
             unique_pos.insert(0, self.padding)
@@ -228,7 +228,7 @@ def get_dataset(dataset, split, base_word_encoder, pos_map=None, dependency_map=
         data = ACE2005Dataset(split, base_word_encoder)
     elif dataset == "drug":
         data = DrugGeneDataset(split, base_word_encoder)
-    elif dataset == "billion":
-        data = BillionDataset(split, base_word_encoder, pos_map=pos_map, dependency_map=dependency_map)
+    elif dataset == "billion" or dataset == "pubmed":
+        data = PretrainDataset(split, base_word_encoder, dataset, pos_map=pos_map, dependency_map=dependency_map)
 
     return data
