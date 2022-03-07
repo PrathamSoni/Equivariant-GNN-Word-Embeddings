@@ -24,5 +24,5 @@ source ~/.bashrc
 conda activate local_nmt
 
 cd ../
-python main.py --dataset billion --mode pretrain --lr .001 --encoder wikipedia --epochs 1000 --dir ner
-cp -R runs/ner runs/re
+python main.py --mode train --model bilstm --pretrain_dataset pubmed --dir n_ary --encoder pubmed --epochs 100 --lr .0001  --dataset drug --batch_size 8
+python main.py --mode test --model bilstm --pretrain_dataset pubmed --dir n_ary --encoder pubmed --dataset drug

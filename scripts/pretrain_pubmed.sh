@@ -24,4 +24,4 @@ source ~/.bashrc
 conda activate local_nmt
 
 cd ../
-python main.py --dataset pubmed --mode pretrain --lr .001 --encoder pubmed --epochs 1000
+python main.py --dataset pubmed --mode pretrain --lr .001 --encoder pubmed --epochs 1000 --dir n_ary

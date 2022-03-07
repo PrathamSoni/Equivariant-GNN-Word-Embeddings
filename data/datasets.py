@@ -1,10 +1,17 @@
-from torch.utils.data import Dataset
+import math
+import os
+import time
+
+import numpy as np
+import spacy
 import torch
+import torch.nn.functional as F
 import torch_geometric
 from gensim.models import KeyedVectors
-import torch.nn.functional as F
-import numpy as np
-import time
+from torch.utils.data import Dataset
+
+from data.drug.machinereading.models.backoffnet import Preprocessor as DrugPreprocesor, Example, get_entity_lists, \
+    get_ds_train_dev_pmids, JAX_TEST_PMIDS_FILE, make_vocab
 
 
 class GraphEncoder:
@@ -123,7 +130,7 @@ class GraphEncoder:
                 edge_one_hot_map[(i, i)][4] += 1
 
             edge_index = torch.as_tensor([list(edge) for edge in edge_one_hot_map.keys()],
-                                      device=self.device).T.long()
+                                         device=self.device).T.long()
             edge_one_hot = torch.stack(list(edge_one_hot_map.values())).to(self.device)
             pos_embeddings = self._positional_embeddings(edge_index)
             E_vectors = coords[edge_index[0]] - coords[edge_index[1]]
@@ -212,22 +219,110 @@ class ACE2005Dataset(Dataset):
 
 
 class DrugGeneDataset(Dataset):
-    def __init__(self, split, base_word_encoder):
-        pass
+    def __init__(self, split, base_word_encoder, graph_encoder, pos_map=None, dependency_map=None, vocab=None,
+                 preprocessor=None):
+        start = time.time()
+        self.encoder = GraphEncoder(base_word_encoder)
+        self.model_encoder = graph_encoder
+        self.device = self.encoder.device
+        self.pos_map = pos_map
+        self.dependency_map = dependency_map
+
+        entity_lists = get_entity_lists()
+        # Read data
+        train_pmids_set, dev_ds_pmids_set = get_ds_train_dev_pmids("drug/data/pmid_lists/init_pmid_list.txt")
+        ds_train_dev_data = Example.read_examples("drug/data/examples_v2/sentence/ds_train_dev.txt")
+        # Filter out examples that doesn't contain pair or triple candidates
+        ds_train_dev_data = [x for x in ds_train_dev_data if x.triple_candidates]
+        if split == "train":
+            self.data = [x for x in ds_train_dev_data if x.pmid in train_pmids_set]
+
+        elif split == "dev":
+            self.data = [x for x in ds_train_dev_data if x.pmid in dev_ds_pmids_set]
+
+        else:
+            jax_dev_test_data = Example.read_examples("drug/data/examples_v2/sentence/jax_dev_test.txt")
+            jax_dev_test_data = [x for x in jax_dev_test_data if x.triple_candidates]
+
+            # with open(os.path.join("data/drug/data", JAX_DEV_PMIDS_FILE)) as f:
+            #     dev_jax_pmids_set = set(x.strip() for x in f if x.strip())
+            with open(os.path.join("data/drug/data", JAX_TEST_PMIDS_FILE)) as f:
+                test_pmids_set = set(x.strip() for x in f if x.strip())
+
+            # dev_jax_data = [x for x in jax_dev_test_data if x.pmid in dev_jax_pmids_set]
+            self.data = [x for x in jax_dev_test_data if x.pmid in test_pmids_set]
+
+        self.vocab = vocab or make_vocab(self.data, entity_lists, 0)
+        self.preprocessor = preprocessor or DrugPreprocesor(entity_lists, self.vocab, self.device)
+        self.nlp = spacy.load("en_core_sci_lg")
+
+        print(f"processed dataset in {time.time() - start}s")
+
+    def encode_dependence(self, depend):
+        return torch.as_tensor(
+            [[int(dependency[0]) - 1 if int(dependency[0]) != 0 else i, self.dependency_map.get(dependency[1], 0)] for
+             i, dependency in enumerate(depend)], device=self.device)
+
+    def encode_pos(self, pos):
+        out = []
+        for i in pos:
+            out.append(self.pos_map.get(i, 0))
+        return torch.as_tensor(out, device=self.device)
 
     def __len__(self):
-        pass
+        return len(self.data)
 
     def __getitem__(self, item):
-        pass
+        preproc = self.preprocessor.preprocess(self.data[item], None)
+        labels = preproc[-2:]
+        word_idx_mat, lens, para_vecs, mentions, triple_candidates, pair_candidates = preproc[:-2]
+        sent = self.vocab.recover_sentence(torch.squeeze(word_idx_mat).tolist())
+
+        pretrain_parsed_data = self.nlp(sent)
+        pretrain_depend_fragments = [" ".join(
+            [f"(\'{word.text}\', {word.head.i + 1 if word.dep_ != 'ROOT' else 0}, \'{word.dep_}\')" for word in sent])
+            for sent in pretrain_parsed_data.sents]
+        pos = [" ".join([word.pos_ for word in sent]) for sent in
+               pretrain_parsed_data.sents]
+        depend = " ".join(pretrain_depend_fragments)
+
+        processed_line = [dependency.replace("(", "").replace("'", "").replace(")", "").split(", ") for
+                          dependency in
+                          depend.strip().split(") (")]
+        depend = [token[1:] for token in processed_line]
+        tokens = [token[0] for token in processed_line]
+
+        processed_depend = self.encode_dependence(depend)
+        g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
+        x = self.model_encoder.embedding(g_encode)
+        return torch.unsqueeze(x, dim=1), mentions, triple_candidates, pair_candidates, *labels
 
 
-def get_dataset(dataset, split, base_word_encoder, pos_map=None, dependency_map=None):
+def custom_iter(data, shuffle=False):
+    """ Yield batches of source and target sentences reverse sorted by length (largest to smallest).
+    @param data (list of (src_sent, tgt_sent)): list of tuples containing source and target sentence
+    @param batch_size (int): batch size
+    @param shuffle (boolean): whether to randomly shuffle the dataset
+    """
+    index_array = list(range(len(data)))
+
+    if shuffle:
+        np.random.shuffle(index_array)
+
+    for i in index_array:
+        yield data[i]
+
+
+def get_dataset(dataset, split, base_word_encoder, pos_map=None, dependency_map=None, graph_encoder=None, vocab=None,
+                preprocessor=None):
     if dataset == "ace":
         data = ACE2005Dataset(split, base_word_encoder)
     elif dataset == "drug":
-        data = DrugGeneDataset(split, base_word_encoder)
+        data = DrugGeneDataset(split, base_word_encoder, graph_encoder, pos_map=pos_map, dependency_map=dependency_map,
+                               vocab=vocab, preprocessor=preprocessor)
     elif dataset == "billion" or dataset == "pubmed":
         data = PretrainDataset(split, base_word_encoder, dataset, pos_map=pos_map, dependency_map=dependency_map)
+    else:
+        raise ValueError("bad dataset name")
 
     return data
