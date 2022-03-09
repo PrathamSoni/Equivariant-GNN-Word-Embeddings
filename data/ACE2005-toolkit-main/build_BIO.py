@@ -59,7 +59,7 @@ def get_entity_tag(raw_data):
         position_list = []
         length_list = []
         for entity in temp_entity_mentions:
-            type_list.append(entity['entity-type'].split(":")[0])
+            type_list.append("-".join(entity['entity-type'].split(":")[0].split("-")[:1]))
             position_list.append(
                 [entity['position'][0], entity['position'][1] + 1])  # plus 1 to make sure not empty
             length_list.append(entity['position'][1] - entity['position'][0] + 1)
@@ -142,10 +142,10 @@ def get_BIO(path, type_name, save=False):
         raw_data = json.loads(f.read())
     token = get_sentence_token(raw_data)
     entity_BIO = get_entity_tag(raw_data)
-    event_trigger_BIO, event_argument_BIO = get_event_tag(raw_data)
+
     if save:
         BIO_path = '/'.join(path.split('/')[:-1]) + '/' + 'BIO/'
-        type_path = BIO_path + type_name + '/'
+        type_path = BIO_path + type_name
         try:
             os.mkdir(BIO_path)
         except:
@@ -154,12 +154,14 @@ def get_BIO(path, type_name, save=False):
             os.mkdir(type_path)
         except:
             pass
-        for name in ['token', 'entity_BIO']:
-            out_path = type_path + name + '.json'
-            with open(out_path, 'w', encoding='utf8') as f:
-                f.write(json.dumps(eval(name), indent=4, ensure_ascii=False))
+        out_path = type_path + '.data'
+        with open(out_path, 'w', encoding='utf8') as f:
+            for sent, ents in zip(token, entity_BIO):
+                for word, label in zip(sent, ents):
+                    f.write(word+"\t"+"\t".join(label)+"\n")
+                f.write("\n")
 
-    return token, entity_BIO, event_trigger_BIO, event_argument_BIO
+    return token, entity_BIO
 
 
 if __name__ == "__main__":

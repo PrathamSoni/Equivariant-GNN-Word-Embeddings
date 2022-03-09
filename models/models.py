@@ -4,13 +4,14 @@ import torch.nn.utils.rnn as rnn
 import gvp
 import torch
 import collections
+import stanza
 
 from data.drug.machinereading.models.backoffnet import Candidate, ALL_ENTITY_TYPE_PAIRS
 
 
 def get_sentences(x, indices):
     sents = []
-    for i in range(x.num_graphs):
+    for i in range(indices.shape[0] - 1):
         sents.append(gvp.tuple_index(x, slice(indices[i], indices[i + 1])))
 
     return sents
@@ -39,7 +40,6 @@ class GraphModel(Module):
         h_E = (x.edge_s, x.edge_v)
         pass1 = self.W1(h_V, x.edge_index, h_E, node_mask=mask)
         pass2 = self.W2(pass1, x.edge_index, h_E, node_mask=mask)
-        # print(torch.norm(h_V[0]), torch.norm(pass1[0]), torch.norm(pass2[0]))
         return h_V[0] + pass1[0] + pass2[0]
 
     def forward(self, x, mask=None):
@@ -243,3 +243,44 @@ class BiLSTM(Module):
         final_hidden = torch.relu(self.hidden_all(triple_feats))  # C, 2*h
         triple_logits = self.out_triple(final_hidden)[:, 0]  # C
         return triple_logits, pair_logits
+
+
+class GraphModelDataWrapper(Module):
+    def __init__(self, encoder, model_encoder, pos_map=None, dep_map=None):
+        super().__init__()
+        self.pos_map = pos_map
+        self.dependency_map = dep_map
+        self.encoder = encoder
+        self.model_encoder = model_encoder
+        self.device = self.encoder.device
+
+        stanza.download('en')  # This downloads the English models for the neural pipeline
+        self.nlp = stanza.Pipeline('en', tokenize_pretokenized=True)  # This sets up a default neural pipeline in English
+
+    def encode_dependence(self, depend):
+        return torch.as_tensor(
+            [[int(dependency[0]) - 1 if int(dependency[0]) != 0 else i, self.dependency_map.get(dependency[1], 0)] for
+             i, dependency in enumerate(depend)], device=self.device)
+
+    def encode_pos(self, pos):
+        out = []
+        for i in pos:
+            out.append(self.pos_map.get(i, 0))
+        return torch.as_tensor(out, device=self.device)
+
+    def forward(self, sentence):
+        pretrain_parsed_data = self.nlp(sentence)
+        pretrain_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                     pretrain_parsed_data.sentences]
+        pos = [" ".join([word.upos for word in sent.words]) for sent in pretrain_parsed_data.sentences]
+        depend = " ".join(pretrain_depend_fragments)
+
+        processed_line = [dependency.replace("(", "").replace("'", "").replace(")", "").split(", ") for dependency in
+                          depend.strip().split(") (")]
+        depend = [token[1:] for token in processed_line]
+        tokens = [token[0] for token in processed_line]
+
+        processed_depend = self.encode_dependence(depend)
+        g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
+        x = self.model_encoder.embedding(g_encode)
+        return x
