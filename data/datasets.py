@@ -11,7 +11,7 @@ from gensim.models import KeyedVectors
 from torch.utils.data import Dataset
 
 from data.drug.machinereading.models.backoffnet import Preprocessor as DrugPreprocesor, Example, get_entity_lists, \
-    get_ds_train_dev_pmids, JAX_TEST_PMIDS_FILE, make_vocab
+    get_ds_train_dev_pmids, JAX_TEST_PMIDS_FILE, make_vocab, JAX_DEV_PMIDS_FILE
 
 
 class GraphEncoder:
@@ -232,24 +232,25 @@ class DrugGeneDataset(Dataset):
         # Read data
         train_pmids_set, dev_ds_pmids_set = get_ds_train_dev_pmids("drug/data/pmid_lists/init_pmid_list.txt")
         ds_train_dev_data = Example.read_examples("drug/data/examples_v2/sentence/ds_train_dev.txt")
+        jax_dev_test_data = Example.read_examples("drug/data/examples_v2/sentence/jax_dev_test.txt")
+
         # Filter out examples that doesn't contain pair or triple candidates
         ds_train_dev_data = [x for x in ds_train_dev_data if x.triple_candidates]
+        jax_dev_test_data = [x for x in jax_dev_test_data if x.triple_candidates]
+
         if split == "train":
             self.data = [x for x in ds_train_dev_data if x.pmid in train_pmids_set]
 
         elif split == "dev":
             self.data = [x for x in ds_train_dev_data if x.pmid in dev_ds_pmids_set]
+            with open(os.path.join("data/drug/data", JAX_DEV_PMIDS_FILE)) as f:
+                dev_jax_pmids_set = set(x.strip() for x in f if x.strip())
+            self.data = [x for x in jax_dev_test_data if x.pmid in dev_jax_pmids_set]
 
         else:
-            jax_dev_test_data = Example.read_examples("drug/data/examples_v2/sentence/jax_dev_test.txt")
-            jax_dev_test_data = [x for x in jax_dev_test_data if x.triple_candidates]
-
-            # with open(os.path.join("data/drug/data", JAX_DEV_PMIDS_FILE)) as f:
-            #     dev_jax_pmids_set = set(x.strip() for x in f if x.strip())
             with open(os.path.join("data/drug/data", JAX_TEST_PMIDS_FILE)) as f:
                 test_pmids_set = set(x.strip() for x in f if x.strip())
 
-            # dev_jax_data = [x for x in jax_dev_test_data if x.pmid in dev_jax_pmids_set]
             self.data = [x for x in jax_dev_test_data if x.pmid in test_pmids_set]
 
         self.vocab = vocab or make_vocab(self.data, entity_lists, 0)

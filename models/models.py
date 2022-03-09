@@ -39,6 +39,7 @@ class GraphModel(Module):
         h_E = (x.edge_s, x.edge_v)
         pass1 = self.W1(h_V, x.edge_index, h_E, node_mask=mask)
         pass2 = self.W2(pass1, x.edge_index, h_E, node_mask=mask)
+        # print(torch.norm(h_V[0]), torch.norm(pass1[0]), torch.norm(pass2[0]))
         return h_V[0] + pass1[0] + pass2[0]
 
     def forward(self, x, mask=None):

@@ -140,3 +140,4 @@ dmypy.json
 *.xml
 /data/pubmed/splits/
 /gvp-pytorch/
+/data/ACE2005-toolkit-main/

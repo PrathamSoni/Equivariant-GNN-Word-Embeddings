@@ -278,7 +278,7 @@ def test(model, dataset, pretrain_dataset, dir, encoder):
         model.zero_grad()
         triple_labels, pair_labels = x[-2:]
         triple_logits, pair_logits = model(*x[:-2])
-
+        # print(triple_labels)
         y_true.extend(triple_labels.tolist())
         y_proba.extend(torch.sigmoid(triple_logits).tolist())
 
@@ -296,6 +296,7 @@ def test(model, dataset, pretrain_dataset, dir, encoder):
 
     y_pred = [1 if y >= .5 else 0 for y in y_proba]
 
+    # print(y_true, y_proba, y_pred)
     a = accuracy_score(y_true, y_pred)
     r = recall_score(y_true, y_pred)
     p = precision_score(y_true, y_pred)
