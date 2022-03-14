@@ -318,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--encoder")
     args = parser.parse_args()
 
-    device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
+    device = torch.device(torch.cuda.current_device() if torch.cuda.is_available() else 'cpu')
 
     run_dir = args.dir or datetime.datetime.now().strftime("%d%m%Y%H%M%S")
     working_dir = os.path.join(os.getcwd(), 'runs', run_dir)

@@ -3,7 +3,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 
 # only use the following on partition with GPUs
 #SBATCH --gres=gpu:1

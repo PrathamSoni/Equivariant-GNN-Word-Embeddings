@@ -207,17 +207,6 @@ class PretrainDataset(Dataset):
         return self.encoder(self.tokens[item], processed_depend, self.encode_pos(pos))
 
 
-class ACE2005Dataset(Dataset):
-    def __init__(self, split, base_word_encoder):
-        pass
-
-    def __len__(self):
-        pass
-
-    def __getitem__(self, item):
-        pass
-
-
 class DrugGeneDataset(Dataset):
     def __init__(self, split, base_word_encoder, graph_encoder, pos_map=None, dependency_map=None, vocab=None,
                  preprocessor=None):
@@ -231,8 +220,8 @@ class DrugGeneDataset(Dataset):
         entity_lists = get_entity_lists()
         # Read data
         train_pmids_set, dev_ds_pmids_set = get_ds_train_dev_pmids("drug/data/pmid_lists/init_pmid_list.txt")
-        ds_train_dev_data = Example.read_examples("drug/data/examples_v2/sentence/ds_train_dev.txt")
-        jax_dev_test_data = Example.read_examples("drug/data/examples_v2/sentence/jax_dev_test.txt")
+        ds_train_dev_data = Example.read_examples("drug/data/examples_v2/document/ds_train_dev.txt")
+        jax_dev_test_data = Example.read_examples("drug/data/examples_v2/document/jax_dev_test.txt")
 
         # Filter out examples that doesn't contain pair or triple candidates
         ds_train_dev_data = [x for x in ds_train_dev_data if x.triple_candidates]
@@ -277,33 +266,46 @@ class DrugGeneDataset(Dataset):
         preproc = self.preprocessor.preprocess(self.data[item], None)
         labels = preproc[-2:]
         word_idx_mat, lens, para_vecs, mentions, triple_candidates, pair_candidates = preproc[:-2]
-        sent = self.vocab.recover_sentence(torch.squeeze(word_idx_mat).tolist())
+        para_idx = word_idx_mat.T.tolist()
+        sents = [self.vocab.recover_sentence(idx[:length]) for idx, length in zip(para_idx, lens.tolist())]
+        lens = []
+        embeddings = []
+        for sent in sents:
+            pretrain_parsed_data = self.nlp(sent)
+            pretrain_depend_fragments = [" ".join(
+                [f"(\'{word.text}\', {word.head.i + 1 if word.dep_ != 'ROOT' else 0}, \'{word.dep_}\')" for word in
+                 sent])
+                for sent in pretrain_parsed_data.sents]
+            pos = [" ".join([word.pos_ for word in sent]) for sent in
+                   pretrain_parsed_data.sents]
+            depend = " ".join(pretrain_depend_fragments)
 
-        pretrain_parsed_data = self.nlp(sent)
-        pretrain_depend_fragments = [" ".join(
-            [f"(\'{word.text}\', {word.head.i + 1 if word.dep_ != 'ROOT' else 0}, \'{word.dep_}\')" for word in sent])
-            for sent in pretrain_parsed_data.sents]
-        pos = [" ".join([word.pos_ for word in sent]) for sent in
-               pretrain_parsed_data.sents]
-        depend = " ".join(pretrain_depend_fragments)
+            processed_line = [dependency.replace("(", "").replace("'", "").replace(")", "").split(", ") for
+                              dependency in
+                              depend.strip().split(") (")]
+            depend = [token[1:] for token in processed_line]
+            tokens = [token[0] for token in processed_line]
 
-        processed_line = [dependency.replace("(", "").replace("'", "").replace(")", "").split(", ") for
-                          dependency in
-                          depend.strip().split(") (")]
-        depend = [token[1:] for token in processed_line]
-        tokens = [token[0] for token in processed_line]
+            processed_depend = self.encode_dependence(depend)
+            g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
+            x = self.model_encoder.embedding(g_encode)
+            lens.append(x.shape[0])
+            embeddings.append(x)
 
-        processed_depend = self.encode_dependence(depend)
-        g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
-        x = self.model_encoder.embedding(g_encode)
-        return torch.unsqueeze(x, dim=1), mentions, triple_candidates, pair_candidates, *labels
+        max_len = max(lens)
+        embeddings = sorted(embeddings, key=lambda x: x.shape[0], reverse=True)
+        embeddings = [torch.nn.functional.pad(x, pad=(0, 0, 0, max_len - x.shape[0]), mode='constant', value=0) for x in
+                      embeddings]
+        x = torch.stack(embeddings, dim=1)
+        return x, sorted(lens, reverse=True), mentions, triple_candidates, pair_candidates, *labels
 
 
 def custom_iter(data, shuffle=False):
-    """ Yield batches of source and target sentences reverse sorted by length (largest to smallest).
-    @param data (list of (src_sent, tgt_sent)): list of tuples containing source and target sentence
-    @param batch_size (int): batch size
-    @param shuffle (boolean): whether to randomly shuffle the dataset
+    """
+    Yields data one at a time.
+    :param data:
+    :param shuffle:
+    :return:
     """
     index_array = list(range(len(data)))
 
@@ -316,9 +318,7 @@ def custom_iter(data, shuffle=False):
 
 def get_dataset(dataset, split, base_word_encoder, pos_map=None, dependency_map=None, graph_encoder=None, vocab=None,
                 preprocessor=None):
-    if dataset == "ace":
-        data = ACE2005Dataset(split, base_word_encoder)
-    elif dataset == "drug":
+    if dataset == "drug":
         data = DrugGeneDataset(split, base_word_encoder, graph_encoder, pos_map=pos_map, dependency_map=dependency_map,
                                vocab=vocab, preprocessor=preprocessor)
     elif dataset == "billion" or dataset == "pubmed":

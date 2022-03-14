@@ -25,4 +25,4 @@ conda activate local_nmt
 
 cd ../
 python data/walk-based-re/src/walk_re.py --config data/walk-based-re/configs/ace2005_params_l4.yaml --train --gpu 0
-python3 walk_re.py --config ../configs/ace2005_params_l4.yaml --test --gpu 0
+python data/walk-based-re/src/walk_re.py --config data/walk-based-re/configs/ace2005_params_l4.yaml --test --gpu 0

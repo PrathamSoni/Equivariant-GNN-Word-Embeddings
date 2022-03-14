@@ -127,7 +127,7 @@ class BiLSTM(Module):
             return torch.stack([logsumexp(g, dim=0) for g in grouped_vecs])
         raise NotImplementedError
 
-    def forward(self, x, mentions,
+    def forward(self, x, lens, mentions,
                 triple_candidates, pair_candidates):
         """Forward pass.
 
@@ -152,9 +152,9 @@ class BiLSTM(Module):
 
         # Build local embeddings of each word
         # embs = x  # T, P, e
-        # lstm_in = rnn.pack_padded_sequence(embs, lens)  # T, P, e + pe
-        embs, _ = self.lstm(x)
-        # embs, _ = rnn.pad_packed_sequence(lstm_out_packed)  # T, P, 2*h
+        x = rnn.pack_padded_sequence(x, lens)  # T, P, e + pe
+        x, _ = self.lstm(x)
+        x, _ = rnn.pad_packed_sequence(x)  # T, P, 2*h
 
         # Gather co-occurring mention pairs and triples
         pair_inputs = {(t1, t2): [[] for i in range(len(cands))]
@@ -171,8 +171,8 @@ class BiLSTM(Module):
                         query_cand = Candidate(**{t1: m1.name, t2: m2.name})
                         if query_cand in pair_to_idx[(t1, t2)]:
                             idx = pair_to_idx[(t1, t2)][query_cand]
-                            cur_vecs = torch.cat([embs[m1.start, para_idx, :],
-                                                  embs[m2.start, para_idx, :]])  # 4*h
+                            cur_vecs = torch.cat([x[m1.start, para_idx, :],
+                                                  x[m2.start, para_idx, :]])  # 4*h
                             pair_inputs[(t1, t2)][idx].append(cur_vecs)
 
             for m1 in typed_mentions['drug']:
@@ -181,9 +181,9 @@ class BiLSTM(Module):
                         query_cand = Candidate(m1.name, m2.name, m3.name)
                         if query_cand in triple_to_idx:
                             idx = triple_to_idx[query_cand]
-                            cur_vecs = torch.cat([embs[m1.start, para_idx, :],
-                                                  embs[m2.start, para_idx, :],
-                                                  embs[m3.start, para_idx, :]])  # 6*h
+                            cur_vecs = torch.cat([x[m1.start, para_idx, :],
+                                                  x[m2.start, para_idx, :],
+                                                  x[m3.start, para_idx, :]])  # 6*h
                             triple_inputs[idx].append(cur_vecs)
 
         # Compute local mention pair/triple representations
@@ -255,7 +255,7 @@ class GraphModelDataWrapper(Module):
         self.device = self.encoder.device
 
         stanza.download('en')  # This downloads the English models for the neural pipeline
-        self.nlp = stanza.Pipeline('en', tokenize_pretokenized=True)  # This sets up a default neural pipeline in English
+        self.nlp = stanza.Pipeline('en', tokenize_pretokenized=True, use_gpu=False)  # This sets up a default neural pipeline in English
 
     def encode_dependence(self, depend):
         return torch.as_tensor(
@@ -284,3 +284,20 @@ class GraphModelDataWrapper(Module):
         g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
         x = self.model_encoder.embedding(g_encode)
         return x
+
+    def example(self, sentence):
+        pretrain_parsed_data = self.nlp(sentence)
+        pretrain_depend_fragments = [" ".join(sent.dependencies_string().split("\n")) for sent in
+                                     pretrain_parsed_data.sentences]
+        pos = [" ".join([word.upos for word in sent.words]) for sent in pretrain_parsed_data.sentences]
+        depend = " ".join(pretrain_depend_fragments)
+
+        processed_line = [dependency.replace("(", "").replace("'", "").replace(")", "").split(", ") for dependency in
+                          depend.strip().split(") (")]
+        depend = [token[1:] for token in processed_line]
+        tokens = [token[0] for token in processed_line]
+
+        processed_depend = self.encode_dependence(depend)
+        g_encode = self.encoder(tokens, processed_depend, self.encode_pos(pos))
+        x = self.model_encoder.embedding(g_encode)
+        return x, g_encode.node_s
