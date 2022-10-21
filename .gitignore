@@ -129,7 +129,6 @@ dmypy.json
 .pyre/
 
 #custom
-/gvp-pytorch/
 .idea
 /data/drug/
 /data/billion/
@@ -139,6 +138,5 @@ dmypy.json
 *.xml.gz
 *.xml
 /data/pubmed/splits/
-/gvp-pytorch/
 /data/ACE2005-toolkit-main/
 /data/walk-based-re/
