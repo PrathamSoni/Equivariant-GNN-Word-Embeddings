@@ -328,7 +328,7 @@ if __name__ == "__main__":
         os.mkdir(working_dir)
         pretrain(args.dataset, working_dir, args.encoder, args.epochs, args.lr, args.batch_size)
 
-    if args.mode == "train":
+    elif args.mode == "train":
         train(args.model, args.dataset, args.pretrain_dataset, working_dir, args.encoder, args.epochs, args.lr,
               args.batch_size)
 

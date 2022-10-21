@@ -151,6 +151,7 @@ class GraphEncoder:
                                          edge_s=edge_s, edge_v=edge_v,
                                          edge_index=edge_index, mask=mask,
                                          dependency=dependencies.long(), pos=pos.long())
+        print(data)
         return data
 
 
