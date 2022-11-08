@@ -24,10 +24,14 @@ class GraphEncoder:
             self.word_encoder = KeyedVectors.load_word2vec_format("data/wikipediaword2vec/wikipedia200.bin",
                                                                   binary=True)
             self.base_dim = 200
-        elif base_word_encoder == "pubmed":
+        elif base_word_encoder == "pubmed_200":
             self.word_encoder = KeyedVectors.load_word2vec_format("data/pubmedword2vec/pubmed2018_w2v_200D.bin",
                                                                   binary=True)
             self.base_dim = 200
+        elif base_word_encoder == "pubmed_400":
+            self.word_encoder = KeyedVectors.load_word2vec_format("data/pubmedword2vec/pubmed2018_w2v_400D.bin",
+                                                                  binary=True)
+            self.base_dim = 400
 
     def _normalize(self, tensor, dim=-1):
         '''

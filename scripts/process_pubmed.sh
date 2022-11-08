@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=deep --qos=normal
+#SBATCH --partition=rondror --qos=normal
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
@@ -7,7 +7,7 @@
 
 # only use the following on partition with GPUs
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=“training”
+#SBATCH --job-name=“process_pubmed”
 #SBATCH --output=%j.out
 
 # only use the following if you want email notification
@@ -21,7 +21,7 @@ echo "SLURM_NNODES"=$SLURM_NNODES
 echo "SLURMTMPDIR="$SLURMTMPDIR
 echo "working directory = "$SLURM_SUBMIT_DIR
 source ~/.bashrc
-conda activate local_nmt
+conda activate torch
 
 cd ../utils
 python process_data.py --dataset pubmed
